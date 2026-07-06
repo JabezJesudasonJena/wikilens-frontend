@@ -1,64 +1,98 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
 
 export default function Home() {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
+
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    if (!query.trim()) return;
+
+    setLoading(true);
+    setStatusMessage("");
+    
+    try {
+      // Connect to your Dockerized Express API
+      const res = await fetch(`http://localhost:3001/search?q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      
+      if (res.status === 202) {
+        // Cache Miss: The worker is crawling it
+        setResults([]);
+        setStatusMessage(data.message);
+      } else {
+        // Cache Hit: Data found
+        setResults(data.results || []);
+        if (data.results.length === 0) setStatusMessage("No results found.");
+      }
+    } catch (error) {
+      console.error("Search failed:", error);
+      setStatusMessage("Failed to connect to the search API.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+    <div className="min-h-screen bg-white text-gray-900 font-sans">
+      <main className="max-w-3xl mx-auto px-4 py-12">
+        
+        {/* Search Header */}
+        <div className="flex flex-col items-center mb-10">
+          <h1 className="text-5xl font-bold mb-8 text-blue-600 tracking-tight">WikiSearch</h1>
+          
+          <form onSubmit={handleSearch} className="w-full flex shadow-md rounded-full bg-white border border-gray-200 overflow-hidden focus-within:shadow-lg transition-shadow">
+            <input
+              type="text"
+              className="w-full px-6 py-4 outline-none text-lg"
+              placeholder="Search the indexed web..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            <button 
+              type="submit" 
+              className="px-8 bg-blue-50 text-blue-600 font-semibold hover:bg-blue-100 transition-colors"
+              disabled={loading}
+            >
+              {loading ? "Searching..." : "Search"}
+            </button>
+          </form>
         </div>
+
+        {/* Status Messages (Crawling or Errors) */}
+        {statusMessage && (
+          <div className="text-center p-4 mb-6 rounded-lg bg-gray-50 border border-gray-100 text-gray-600 animate-pulse">
+            {statusMessage}
+          </div>
+        )}
+
+        {/* Results Container */}
+        <div className="space-y-8">
+          {results.map((result: any, index: number) => (
+            <div key={index} className="group">
+              <a href={result.url} target="_blank" rel="noopener noreferrer" className="block">
+                <span className="text-sm text-gray-700 truncate block mb-1">
+                  {result.url}
+                </span>
+                <h2 className="text-xl font-medium text-blue-800 group-hover:underline mb-2">
+                  {result.title}
+                </h2>
+                {/* CRITICAL: dangerouslySetInnerHTML is required here to render 
+                  the <b> tags generated by PostgreSQL's ts_headline function. 
+                */}
+                <p 
+                  className="text-gray-600 text-sm leading-relaxed"
+                  dangerouslySetInnerHTML={{ __html: result.snippet + '...' }} 
+                />
+              </a>
+            </div>
+          ))}
+        </div>
+
       </main>
     </div>
   );
